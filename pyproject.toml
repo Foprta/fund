@@ -1,0 +1,35 @@
+[project]
+name = "luna-fund"
+version = "0.1.0"
+description = "Luna Fund AI assistant monorepo"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv.workspace]
+members = [
+    "packages/fund_core",
+    "packages/integrations",
+    "packages/rag",
+    "services/api",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "pytest-timeout>=2.3",
+    "ruff>=0.8",
+    "alembic>=1.14",
+    "pyyaml>=6.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = [".", "packages/fund_core/src", "packages/rag/src", "services/api/src"]
+testpaths = ["tests"]
+markers = [
+    "integration: real LLM + Postgres (local only; pytest -m integration)",
+]

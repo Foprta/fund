@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.env
+.env.local
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Project
+*.log
+.docker/
+postgres_data/
+redis_data/
+
+# Secrets
+credentials.json
+*-credentials.json
+service-account*.json
+
+# Node (portal, later)
+node_modules/
+apps/portal/dist/
+
+# Local deployment-only modules, data and tests — never committed
+/local/
+*_local.py
+api/policy_local.py
+migrations/versions/*_local.py
+/tests_local/

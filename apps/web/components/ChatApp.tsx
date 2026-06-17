@@ -1,0 +1,358 @@
+"use client";
+
+import { useChat } from "@ai-sdk/react";
+import type { UIMessage } from "ai";
+import { AlertCircle, MessageSquare } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import {
+  Message,
+  MessageContent,
+  MessageResponse,
+} from "@/components/ai-elements/message";
+import {
+  PromptInput,
+  PromptInputBody,
+  PromptInputFooter,
+  PromptInputSubmit,
+  PromptInputTextarea,
+} from "@/components/ai-elements/prompt-input";
+import { Button } from "@/components/ui/button";
+import { EXAMPLE_PROMPTS } from "@/lib/chat/constants";
+import {
+  DEFAULT_THREAD_TITLE,
+  deriveThreadTitle,
+  emptyThreadStore,
+  loadThreadStore,
+  type StoredMessage,
+  type StoredThread,
+  saveThreadStore,
+} from "@/lib/chat/storage";
+import { createLunaChatTransport } from "@/lib/chat/transport";
+
+function toStoredMessages(messages: UIMessage[]): StoredMessage[] {
+  return messages.map((m) => ({
+    id: m.id,
+    role: m.role === "user" ? "user" : "assistant",
+    text: m.parts
+      .filter((p) => p.type === "text")
+      .map((p) => ("text" in p ? p.text : ""))
+      .join(""),
+  }));
+}
+
+function fromStoredMessages(stored: StoredMessage[]): UIMessage[] {
+  return stored.map((s) => ({
+    id: s.id,
+    role: s.role,
+    parts: [{ type: "text" as const, text: s.text }],
+  }));
+}
+
+function threadSnapshot(thread: StoredThread): string {
+  return JSON.stringify({
+    title: thread.title,
+    messages: thread.messages,
+    status: thread.status,
+    draftAssistant: thread.draftAssistant,
+  });
+}
+
+function buildThread(
+  conversationId: string,
+  messages: UIMessage[],
+  status: string,
+  titleFallback: string,
+): StoredThread {
+  const stored = toStoredMessages(messages);
+  return {
+    id: conversationId,
+    title: deriveThreadTitle(stored, titleFallback),
+    updatedAt: Date.now(),
+    messages: stored,
+    status:
+      status === "streaming" || status === "submitted" ? "streaming" : "idle",
+    draftAssistant:
+      status === "streaming"
+        ? stored.filter((m) => m.role === "assistant").at(-1)?.text
+        : undefined,
+  };
+}
+
+type ChatSessionProps = {
+  conversationId: string;
+  initialThread?: StoredThread;
+  seedMessage?: string | null;
+  onSeedConsumed?: () => void;
+  onThreadUpdate?: (thread: StoredThread) => void;
+};
+
+function ChatSession({
+  conversationId,
+  initialThread,
+  seedMessage,
+  onSeedConsumed,
+  onThreadUpdate,
+}: ChatSessionProps) {
+  const transport = useMemo(
+    () => createLunaChatTransport(conversationId),
+    [conversationId],
+  );
+
+  const initialMessages = useMemo(
+    () =>
+      initialThread?.messages?.length
+        ? fromStoredMessages(initialThread.messages)
+        : undefined,
+    [initialThread],
+  );
+
+  const { messages, sendMessage, status, error } = useChat({
+    id: conversationId,
+    transport,
+    messages: initialMessages,
+  });
+
+  const onThreadUpdateRef = useRef(onThreadUpdate);
+  onThreadUpdateRef.current = onThreadUpdate;
+  const titleFallback = initialThread?.title ?? DEFAULT_THREAD_TITLE;
+
+  useEffect(() => {
+    const thread = buildThread(conversationId, messages, status, titleFallback);
+    onThreadUpdateRef.current?.(thread);
+  }, [conversationId, messages, status, titleFallback]);
+
+  useEffect(() => {
+    if (!seedMessage?.trim()) return;
+    const text = seedMessage;
+    onSeedConsumed?.();
+    void sendMessage({ text });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per seed
+  }, [seedMessage]);
+
+  const handleSubmit = async (msg: { text: string }) => {
+    if (!msg.text.trim()) return;
+    await sendMessage({ text: msg.text });
+  };
+
+  return (
+    <div className="flex h-[calc(100dvh-3.5rem)] flex-col md:h-[calc(100dvh-3.5rem)]">
+      <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-3 sm:px-4">
+        {error && (
+          <div className="mt-2 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2 text-destructive text-sm">
+            <AlertCircle className="size-4 shrink-0" />
+            {error.message}
+          </div>
+        )}
+
+        <Conversation className="min-h-0 flex-1">
+          <ConversationContent>
+            {messages.length === 0 ? (
+              <ConversationEmptyState
+                title="Начните диалог"
+                description="Спросите про портфель, NAV/PnL или research-мемо."
+                icon={<MessageSquare className="size-8" />}
+              />
+            ) : (
+              messages.map((message) => (
+                <Message key={message.id} from={message.role}>
+                  <MessageContent>
+                    {message.parts.map((part, i) =>
+                      part.type === "text" ? (
+                        <MessageResponse key={`${message.id}-${i}`}>
+                          {part.text}
+                        </MessageResponse>
+                      ) : null,
+                    )}
+                  </MessageContent>
+                </Message>
+              ))
+            )}
+          </ConversationContent>
+          <ConversationScrollButton />
+        </Conversation>
+
+        <div className="border-t bg-background py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pb-3">
+          <PromptInput onSubmit={handleSubmit}>
+            <PromptInputBody>
+              <PromptInputTextarea placeholder="Вопрос про фонд…" />
+            </PromptInputBody>
+            <PromptInputFooter>
+              <PromptInputSubmit status={status} />
+            </PromptInputFooter>
+          </PromptInput>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ChatApp() {
+  const [store, setStore] = useState(emptyThreadStore);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const [seedMessage, setSeedMessage] = useState<string | null>(null);
+
+  const activeThread = store.threads.find((t) => t.id === activeId);
+
+  useEffect(() => {
+    const loaded = loadThreadStore();
+    let id = loaded.activeId;
+    let next = loaded;
+
+    if (!id) {
+      id = crypto.randomUUID();
+      next = {
+        activeId: id,
+        threads: [
+          {
+            id,
+            title: DEFAULT_THREAD_TITLE,
+            updatedAt: Date.now(),
+            messages: [],
+            status: "idle" as const,
+          },
+          ...loaded.threads,
+        ],
+      };
+      saveThreadStore(next);
+    }
+
+    setStore(next);
+    setActiveId(id);
+    setMounted(true);
+  }, []);
+
+  const handleThreadUpdate = useCallback((thread: StoredThread) => {
+    setStore((prev) => {
+      const existing = prev.threads.find((t) => t.id === thread.id);
+      if (existing && threadSnapshot(existing) === threadSnapshot(thread)) {
+        return prev;
+      }
+      const threads = [
+        thread,
+        ...prev.threads.filter((t) => t.id !== thread.id),
+      ].sort((a, b) => b.updatedAt - a.updatedAt);
+      const next = { activeId: thread.id, threads };
+      saveThreadStore(next);
+      return next;
+    });
+  }, []);
+
+  const handleNewChat = () => {
+    const id = crypto.randomUUID();
+    const next = {
+      activeId: id,
+      threads: [
+        {
+          id,
+          title: "Новый диалог",
+          updatedAt: Date.now(),
+          messages: [],
+          status: "idle" as const,
+        },
+        ...store.threads.filter((t) => t.id !== id),
+      ],
+    };
+    setStore(next);
+    saveThreadStore(next);
+    setActiveId(id);
+  };
+
+  const handleSelectThread = (id: string) => {
+    setActiveId(id);
+    saveThreadStore({ ...store, activeId: id });
+  };
+
+  const handleExample = (text: string) => {
+    if (!activeId) return;
+    setSeedMessage(text);
+  };
+
+  if (!mounted || !activeId) {
+    return (
+      <div className="flex h-[calc(100dvh-3.5rem)] items-center justify-center text-muted-foreground text-sm">
+        Загрузка…
+      </div>
+    );
+  }
+
+  const conversationId = activeId;
+
+  return (
+    <div className="flex h-[calc(100dvh-3.5rem)]">
+      <aside className="hidden w-64 shrink-0 flex-col border-r bg-muted/30 md:flex">
+        <div className="flex items-center justify-between border-b p-3">
+          <span className="font-medium text-sm">Диалоги</span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleNewChat}
+          >
+            Новый
+          </Button>
+        </div>
+        <ul className="flex-1 overflow-y-auto p-2">
+          {store.threads.map((t) => (
+            <li key={t.id}>
+              <button
+                type="button"
+                onClick={() => handleSelectThread(t.id)}
+                className={`w-full rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-accent ${
+                  t.id === conversationId ? "bg-accent" : ""
+                }`}
+              >
+                <span className="line-clamp-2">{t.title}</span>
+                {t.status === "streaming" && (
+                  <span className="text-muted-foreground text-xs">…</span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <div className="border-t p-3">
+          <p className="mb-2 text-muted-foreground text-xs">Примеры</p>
+          <div className="flex flex-col gap-1">
+            {EXAMPLE_PROMPTS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => handleExample(p)}
+                className="rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent"
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-2 border-b px-3 py-2 md:hidden">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleNewChat}
+          >
+            Новый диалог
+          </Button>
+        </div>
+        <ChatSession
+          key={conversationId}
+          conversationId={conversationId}
+          initialThread={activeThread}
+          seedMessage={seedMessage}
+          onSeedConsumed={() => setSeedMessage(null)}
+          onThreadUpdate={handleThreadUpdate}
+        />
+      </div>
+    </div>
+  );
+}

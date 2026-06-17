@@ -1,0 +1,29 @@
+[project]
+name = "luna-api"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fund-core",
+    "integrations",
+    "rag",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "langgraph>=0.2",
+    "langgraph-prebuilt>=1.1",
+    "langchain-core>=0.3",
+    "langchain-openai>=0.3",
+    "sse-starlette>=2.1",
+    "httpx>=0.28",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/api"]
+
+[tool.uv.sources]
+fund-core = { workspace = true }
+integrations = { workspace = true }
+rag = { workspace = true }

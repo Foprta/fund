@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "luna-fund-web",
+  "compatibility_date": "2026-03-09",
+  "main": "vike:server-entry",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "LUNA_API_URL": "http://127.0.0.1:8000"
+  }
+}

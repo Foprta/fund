@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "types": ["vite/client", "vike-react"],
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "paths": {
+      "@/*": ["./*"]
+    }
+  },
+  "exclude": [
+    "dist",
+    "**/*.stories.tsx",
+    ".storybook",
+    "sentry.browser.config.ts",
+    "components/ui/drawer.tsx",
+    "components/ui/menubar.tsx",
+    "components/ui/pill-select.tsx"
+  ]
+}
