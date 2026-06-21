@@ -1,5 +1,6 @@
 """OpenAI-compatible embeddings for RAG."""
 
+import httpx
 from langchain_core.embeddings import Embeddings
 from langchain_openai import OpenAIEmbeddings
 
@@ -34,8 +35,23 @@ def embeddings_configured(settings: Settings | None = None) -> bool:
 
 def get_embeddings() -> Embeddings:
     settings = get_settings()
+    kwargs = {}
+    if settings.embedding_proxy:
+        # Route only embedding traffic through the proxy. Short timeouts so a
+        # stalled tunnel fails fast instead of hanging a live search query
+        # (retrieve.py swallows the error and returns no results); extra retries
+        # absorb intermittent proxy flaps.
+        timeout = httpx.Timeout(20.0, connect=8.0)
+        kwargs["http_async_client"] = httpx.AsyncClient(
+            proxy=settings.embedding_proxy, timeout=timeout
+        )
+        kwargs["http_client"] = httpx.Client(
+            proxy=settings.embedding_proxy, timeout=timeout
+        )
+        kwargs["max_retries"] = 4
     return OpenAIEmbeddings(
         model=settings.embedding_model,
         api_key=resolve_embedding_api_key(settings) or None,
         base_url=resolve_embedding_base_url(settings) or None,
+        **kwargs,
     )

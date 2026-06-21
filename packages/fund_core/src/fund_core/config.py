@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     embedding_api_key: str = ""
     embedding_base_url: str = ""
     embedding_model: str = "text-embedding-3-small"
+    # Optional forward-proxy for embedding calls only (e.g. when the embedding
+    # provider is geo-blocked from the host). Empty = direct connection.
+    embedding_proxy: str = ""
 
     coinstats_share_token: str = ""
     coinstats_uuid: str = ""

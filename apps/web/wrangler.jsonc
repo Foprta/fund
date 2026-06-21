@@ -5,6 +5,6 @@
   "main": "vike:server-entry",
   "compatibility_flags": ["nodejs_compat"],
   "vars": {
-    "LUNA_API_URL": "http://127.0.0.1:8000"
+    "LUNA_API_URL": "https://apifund.foprta.top"
   }
 }
