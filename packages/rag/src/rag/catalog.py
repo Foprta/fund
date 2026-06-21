@@ -46,7 +46,7 @@ def format_research_catalog_block(docs: list[ResearchDocMeta]) -> str:
 
     lines = [
         "",
-        "Research library (use search_research only when the question matches a topic below):",
+        "Research library (topics the fund has memos on). For any question matching a topic below, call search_research to ground your answer, then reply with a brief synthesis in your own words — proportional to the question, never reciting the memo:",
     ]
     for doc in docs:
         label = doc.title or doc.source_path

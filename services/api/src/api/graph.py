@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.access import AccessDecision, DENY_ALL
 from api.agent import agent_run_config, build_chat_agent
-from api.policy import off_topic_intent, off_topic_message
 from api.tools import _tool_result
 from fund_core.embeddings import embeddings_configured
 from rag.catalog import format_research_catalog_block, list_active_research_catalog
@@ -123,12 +122,9 @@ async def stream_chat(
         yield {"type": "done", "content": text, "tool_results": []}
         return
 
-    # Neutral off-topic refusal (topic filter, reveals nothing about access).
-    if off_topic_intent(message):
-        text = off_topic_message()
-        yield {"type": "token", "content": text}
-        yield {"type": "done", "content": text, "tool_results": []}
-        return
+    # Scope is the model's call: the system prompt carries the research catalog
+    # (so the model knows what's on-topic) and the rule to refuse off-topic
+    # questions. No pre-model keyword gate — it over-refused legitimate topics.
 
     catalog_block = ""
     if embeddings_configured():
