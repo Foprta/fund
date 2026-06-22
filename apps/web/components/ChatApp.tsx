@@ -17,12 +17,11 @@ import {
 } from "@/components/ai-elements/message";
 import {
   PromptInput,
-  PromptInputBody,
-  PromptInputFooter,
   PromptInputSubmit,
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
+import { InputGroupAddon } from "@/components/ui/input-group";
 import {
   DEFAULT_THREAD_TITLE,
   deriveThreadTitle,
@@ -139,6 +138,17 @@ function ChatSession({
     await sendMessage({ text: msg.text });
   };
 
+  // Show a "thinking" bubble while the request is in flight but the assistant
+  // hasn't produced any visible text yet (request submitted, or streaming
+  // started but no token landed). It disappears as soon as text arrives.
+  const last = messages.at(-1);
+  const lastAssistantText =
+    last?.role === "assistant"
+      ? last.parts.some((p) => p.type === "text" && "text" in p && p.text.trim())
+      : false;
+  const showThinking =
+    (status === "submitted" || status === "streaming") && !lastAssistantText;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-3 sm:px-4">
@@ -158,19 +168,35 @@ function ChatSession({
                 icon={<MessageSquare className="size-8" />}
               />
             ) : (
-              messages.map((message) => (
-                <Message key={message.id} from={message.role}>
-                  <MessageContent>
-                    {message.parts.map((part, i) =>
-                      part.type === "text" ? (
-                        <MessageResponse key={`${message.id}-${i}`}>
-                          {part.text}
-                        </MessageResponse>
-                      ) : null,
-                    )}
-                  </MessageContent>
-                </Message>
-              ))
+              <>
+                {messages.map((message) => (
+                  <Message key={message.id} from={message.role}>
+                    <MessageContent>
+                      {message.parts.map((part, i) =>
+                        part.type === "text" ? (
+                          <MessageResponse key={`${message.id}-${i}`}>
+                            {part.text}
+                          </MessageResponse>
+                        ) : null,
+                      )}
+                    </MessageContent>
+                  </Message>
+                ))}
+                {showThinking && (
+                  <Message from="assistant">
+                    <MessageContent>
+                      <span className="inline-flex items-center gap-1 text-muted-foreground text-sm">
+                        Думаю
+                        <span className="inline-flex gap-0.5">
+                          <span className="size-1 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
+                          <span className="size-1 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
+                          <span className="size-1 animate-bounce rounded-full bg-current" />
+                        </span>
+                      </span>
+                    </MessageContent>
+                  </Message>
+                )}
+              </>
             )}
           </ConversationContent>
           <ConversationScrollButton />
@@ -178,12 +204,13 @@ function ChatSession({
 
         <div className="shrink-0 border-t bg-background py-3">
           <PromptInput onSubmit={handleSubmit}>
-            <PromptInputBody>
-              <PromptInputTextarea placeholder="Вопрос про фонд…" />
-            </PromptInputBody>
-            <PromptInputFooter>
+            <PromptInputTextarea
+              placeholder="Вопрос про фонд…"
+              className="min-h-[3.5rem] px-3 text-base"
+            />
+            <InputGroupAddon align="inline-end" className="self-end pb-2">
               <PromptInputSubmit status={status} />
-            </PromptInputFooter>
+            </InputGroupAddon>
           </PromptInput>
         </div>
       </div>
