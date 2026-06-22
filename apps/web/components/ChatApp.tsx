@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import type { UIMessage } from "ai";
-import { AlertCircle, MessageSquare } from "lucide-react";
+import { AlertCircle, MessageSquare, Menu, Plus, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Conversation,
@@ -141,7 +141,7 @@ function ChatSession({
   };
 
   return (
-    <div className="flex h-[calc(100dvh-3.5rem)] flex-col md:h-[calc(100dvh-3.5rem)]">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="mx-auto flex h-full w-full max-w-3xl flex-col px-3 sm:px-4">
         {error && (
           <div className="mt-2 flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2 text-destructive text-sm">
@@ -177,7 +177,7 @@ function ChatSession({
           <ConversationScrollButton />
         </Conversation>
 
-        <div className="border-t bg-background py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pb-3">
+        <div className="shrink-0 border-t bg-background py-3">
           <PromptInput onSubmit={handleSubmit}>
             <PromptInputBody>
               <PromptInputTextarea placeholder="Вопрос про фонд…" />
@@ -192,11 +192,72 @@ function ChatSession({
   );
 }
 
+// Shared thread list + examples, reused by the desktop sidebar and the mobile
+// drawer. Module-level (not nested in ChatApp's render) so it doesn't remount.
+function DialogList({
+  threads,
+  activeId,
+  onSelect,
+  onExample,
+  onNavigate,
+}: {
+  threads: StoredThread[];
+  activeId: string;
+  onSelect: (id: string) => void;
+  onExample: (text: string) => void;
+  onNavigate?: () => void;
+}) {
+  return (
+    <>
+      <ul className="flex-1 overflow-y-auto p-2">
+        {threads.map((t) => (
+          <li key={t.id}>
+            <button
+              type="button"
+              onClick={() => {
+                onSelect(t.id);
+                onNavigate?.();
+              }}
+              className={`w-full rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-accent ${
+                t.id === activeId ? "bg-accent" : ""
+              }`}
+            >
+              <span className="line-clamp-2">{t.title}</span>
+              {t.status === "streaming" && (
+                <span className="text-muted-foreground text-xs">…</span>
+              )}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <div className="border-t p-3">
+        <p className="mb-2 text-muted-foreground text-xs">Примеры</p>
+        <div className="flex flex-col gap-1">
+          {EXAMPLE_PROMPTS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => {
+                onExample(p);
+                onNavigate?.();
+              }}
+              className="rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent"
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function ChatApp() {
   const [store, setStore] = useState(emptyThreadStore);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [seedMessage, setSeedMessage] = useState<string | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const activeThread = store.threads.find((t) => t.id === activeId);
 
@@ -298,39 +359,12 @@ export function ChatApp() {
             Новый
           </Button>
         </div>
-        <ul className="flex-1 overflow-y-auto p-2">
-          {store.threads.map((t) => (
-            <li key={t.id}>
-              <button
-                type="button"
-                onClick={() => handleSelectThread(t.id)}
-                className={`w-full rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-accent ${
-                  t.id === conversationId ? "bg-accent" : ""
-                }`}
-              >
-                <span className="line-clamp-2">{t.title}</span>
-                {t.status === "streaming" && (
-                  <span className="text-muted-foreground text-xs">…</span>
-                )}
-              </button>
-            </li>
-          ))}
-        </ul>
-        <div className="border-t p-3">
-          <p className="mb-2 text-muted-foreground text-xs">Примеры</p>
-          <div className="flex flex-col gap-1">
-            {EXAMPLE_PROMPTS.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => handleExample(p)}
-                className="rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent"
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        </div>
+        <DialogList
+          threads={store.threads}
+          activeId={conversationId}
+          onSelect={handleSelectThread}
+          onExample={handleExample}
+        />
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -339,11 +373,70 @@ export function ChatApp() {
             type="button"
             size="sm"
             variant="outline"
-            onClick={handleNewChat}
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Диалоги"
           >
-            Новый диалог
+            <Menu className="size-4" />
+            Диалоги
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="ml-auto"
+            onClick={handleNewChat}
+            aria-label="Новый диалог"
+          >
+            <Plus className="size-4" />
           </Button>
         </div>
+
+        {/* Lightweight left drawer (no extra deps) for mobile thread switching */}
+        {drawerOpen && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            <button
+              type="button"
+              aria-label="Закрыть"
+              className="absolute inset-0 bg-black/40"
+              onClick={() => setDrawerOpen(false)}
+            />
+            <div className="absolute inset-y-0 left-0 flex w-80 max-w-[85vw] flex-col border-r bg-background shadow-xl">
+              <div className="flex items-center justify-between border-b p-3">
+                <span className="font-medium text-sm">Диалоги</span>
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      handleNewChat();
+                      setDrawerOpen(false);
+                    }}
+                  >
+                    <Plus className="size-4" />
+                    Новый
+                  </Button>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setDrawerOpen(false)}
+                    aria-label="Закрыть"
+                  >
+                    <X className="size-4" />
+                  </Button>
+                </div>
+              </div>
+              <DialogList
+                threads={store.threads}
+                activeId={conversationId}
+                onSelect={handleSelectThread}
+                onExample={handleExample}
+                onNavigate={() => setDrawerOpen(false)}
+              />
+            </div>
+          </div>
+        )}
         <ChatSession
           key={conversationId}
           conversationId={conversationId}

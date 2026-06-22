@@ -55,32 +55,6 @@ export function Shell({ children }: { children: ReactNode }) {
       <main className={cn("flex-1", isChat && "overflow-hidden")}>
         {children}
       </main>
-      <nav
-        aria-label="Мобильная"
-        className="fixed inset-x-0 bottom-0 z-40 border-t bg-background pb-[env(safe-area-inset-bottom)] md:hidden"
-      >
-        <ul className="grid grid-cols-2">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = pageContext.urlPathname === item.href;
-            return (
-              <li key={item.href}>
-                <a
-                  href={item.href}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "flex h-14 flex-col items-center justify-center gap-1 text-xs",
-                    active ? "text-foreground" : "text-muted-foreground",
-                  )}
-                >
-                  <Icon className="size-5" aria-hidden />
-                  {item.label}
-                </a>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
     </div>
   );
 }
