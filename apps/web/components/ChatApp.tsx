@@ -23,7 +23,6 @@ import {
   PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
 import { Button } from "@/components/ui/button";
-import { EXAMPLE_PROMPTS } from "@/lib/chat/constants";
 import {
   DEFAULT_THREAD_TITLE,
   deriveThreadTitle,
@@ -192,63 +191,41 @@ function ChatSession({
   );
 }
 
-// Shared thread list + examples, reused by the desktop sidebar and the mobile
-// drawer. Module-level (not nested in ChatApp's render) so it doesn't remount.
+// Shared thread list, reused by the desktop sidebar and the mobile drawer.
+// Module-level (not nested in ChatApp's render) so it doesn't remount.
 function DialogList({
   threads,
   activeId,
   onSelect,
-  onExample,
   onNavigate,
 }: {
   threads: StoredThread[];
   activeId: string;
   onSelect: (id: string) => void;
-  onExample: (text: string) => void;
   onNavigate?: () => void;
 }) {
   return (
-    <>
-      <ul className="flex-1 overflow-y-auto p-2">
-        {threads.map((t) => (
-          <li key={t.id}>
-            <button
-              type="button"
-              onClick={() => {
-                onSelect(t.id);
-                onNavigate?.();
-              }}
-              className={`w-full rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-accent ${
-                t.id === activeId ? "bg-accent" : ""
-              }`}
-            >
-              <span className="line-clamp-2">{t.title}</span>
-              {t.status === "streaming" && (
-                <span className="text-muted-foreground text-xs">…</span>
-              )}
-            </button>
-          </li>
-        ))}
-      </ul>
-      <div className="border-t p-3">
-        <p className="mb-2 text-muted-foreground text-xs">Примеры</p>
-        <div className="flex flex-col gap-1">
-          {EXAMPLE_PROMPTS.map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => {
-                onExample(p);
-                onNavigate?.();
-              }}
-              className="rounded-md px-2 py-1.5 text-left text-xs hover:bg-accent"
-            >
-              {p}
-            </button>
-          ))}
-        </div>
-      </div>
-    </>
+    <ul className="flex-1 overflow-y-auto p-2">
+      {threads.map((t) => (
+        <li key={t.id}>
+          <button
+            type="button"
+            onClick={() => {
+              onSelect(t.id);
+              onNavigate?.();
+            }}
+            className={`w-full rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-accent ${
+              t.id === activeId ? "bg-accent" : ""
+            }`}
+          >
+            <span className="line-clamp-2">{t.title}</span>
+            {t.status === "streaming" && (
+              <span className="text-muted-foreground text-xs">…</span>
+            )}
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -330,11 +307,6 @@ export function ChatApp() {
     saveThreadStore({ ...store, activeId: id });
   };
 
-  const handleExample = (text: string) => {
-    if (!activeId) return;
-    setSeedMessage(text);
-  };
-
   if (!mounted || !activeId) {
     return (
       <div className="flex h-[calc(100dvh-3.5rem)] items-center justify-center text-muted-foreground text-sm">
@@ -363,7 +335,6 @@ export function ChatApp() {
           threads={store.threads}
           activeId={conversationId}
           onSelect={handleSelectThread}
-          onExample={handleExample}
         />
       </aside>
 
@@ -431,7 +402,6 @@ export function ChatApp() {
                 threads={store.threads}
                 activeId={conversationId}
                 onSelect={handleSelectThread}
-                onExample={handleExample}
                 onNavigate={() => setDrawerOpen(false)}
               />
             </div>
