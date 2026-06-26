@@ -33,6 +33,14 @@ class Settings(BaseSettings):
 
     coinstats_share_token: str = ""
     coinstats_uuid: str = ""
+    # Premium CoinStats openapi key (openapiv1.coinstats.app) for historical
+    # coin price charts. Empty = historical-price sync is skipped.
+    coinstats_api_key: str = ""
+    # Optional explicit portfolio id; if empty it is resolved from portfolio_items["i"].
+    coinstats_portfolio_id: str = ""
+    # Seconds between CoinStats openapi calls. Premium limit is 2 req/sec → 0.6s
+    # keeps us safely under the ceiling.
+    coinstats_throttle_seconds: float = 0.6
 
     google_sheets_spreadsheet_id: str = ""
     sheets_fund_price_range: str = "Fund!B2"
@@ -44,6 +52,12 @@ class Settings(BaseSettings):
     sync_run_on_startup: bool = True
     sync_sheets_interval_minutes: int = 15
     sync_portfolio_interval_minutes: int = 30
+    sync_transactions_interval_minutes: int = 60
+    sync_prices_interval_minutes: int = 1440
+
+    # Historical fund-value series.
+    fund_value_breakdown_top_n: int = 12
+    fund_value_reconcile_warn_pct: float = 5.0
 
     langsmith_tracing: bool = False
     langsmith_api_key: str = ""

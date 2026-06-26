@@ -1,9 +1,9 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -47,6 +47,59 @@ class PortfolioSnapshot(Base):
     all_time_pnl: Mapped[float | None] = mapped_column(Float, nullable=True)
     all_time_pnl_percent: Mapped[float | None] = mapped_column(Float, nullable=True)
     raw_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+
+
+class Transaction(Base):
+    """One coin leg of a CoinStats transaction. Append-by-upsert keyed by
+    dedup_key (a leg may repeat across hourly syncs). amount is signed
+    (Sell < 0). Cumulative SUM(amount) up to a date gives the position."""
+
+    __tablename__ = "transactions"
+    __table_args__ = (
+        UniqueConstraint("dedup_key", name="uq_transactions_dedup_key"),
+        Index("ix_transactions_coin_occurred", "coin_id", "occurred_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    dedup_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    tx_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    coin_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    # Some CoinStats coins carry a contract address as symbol (47+ chars).
+    symbol: Mapped[str] = mapped_column(String(128), nullable=False)
+    amount: Mapped[float] = mapped_column(Float, nullable=False)
+    # pl.cv — diagnostic only; the value series never uses it.
+    usd_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    raw_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+
+
+class CoinPriceHistory(Base):
+    """Daily USD price per coin, from CoinStats premium charts. Upsert by
+    (coin_id, price_date)."""
+
+    __tablename__ = "coin_price_history"
+    __table_args__ = (UniqueConstraint("coin_id", "price_date", name="uq_coin_price_history_coin_date"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    coin_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    price_date: Mapped[date] = mapped_column(Date, nullable=False)
+    price_usd: Mapped[float] = mapped_column(Float, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FundValueHistory(Base):
+    """Materialized daily fund value (positions x historical prices). Upsert by
+    value_date. breakdown holds {coin_id: usd} (top-N + 'other')."""
+
+    __tablename__ = "fund_value_history"
+    __table_args__ = (UniqueConstraint("value_date", name="uq_fund_value_history_date"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    value_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    total_usd: Mapped[float] = mapped_column(Float, nullable=False)
+    breakdown: Mapped[dict[str, float] | None] = mapped_column(JSONB, nullable=True)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Document(Base):

@@ -7,7 +7,13 @@ from typing import Any
 
 from fund_core.config import Settings, get_settings
 from fund_core.db import async_session_factory
-from fund_core.sync_runner import run_portfolio_sync, run_rag_ingest, run_sheets_sync
+from fund_core.sync_runner import (
+    run_portfolio_sync,
+    run_prices_sync,
+    run_rag_ingest,
+    run_sheets_sync,
+    run_transactions_sync,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,11 +26,15 @@ class BackgroundSyncScheduler:
         self._locks = {
             "sheets": asyncio.Lock(),
             "portfolio": asyncio.Lock(),
+            "transactions": asyncio.Lock(),
+            "prices": asyncio.Lock(),
             "rag": asyncio.Lock(),
         }
         self._last_run: dict[str, datetime | None] = {
             "sheets": None,
             "portfolio": None,
+            "transactions": None,
+            "prices": None,
         }
 
     async def start(self) -> None:
@@ -54,6 +64,10 @@ class BackgroundSyncScheduler:
             results["sheets"] = await self._run_job("sheets", run_sheets_sync)
         if self._should_run_portfolio(now):
             results["portfolio"] = await self._run_job("portfolio", run_portfolio_sync)
+        if self._should_run_transactions(now):
+            results["transactions"] = await self._run_job("transactions", run_transactions_sync)
+        if self._should_run_prices(now):
+            results["prices"] = await self._run_job("prices", run_prices_sync)
         if self._settings.sync_run_on_startup:
             results["rag"] = await self._run_job("rag", run_rag_ingest)
         return results
@@ -66,6 +80,10 @@ class BackgroundSyncScheduler:
                     await self._run_job("sheets", run_sheets_sync)
                 if self._should_run_portfolio(now):
                     await self._run_job("portfolio", run_portfolio_sync)
+                if self._should_run_transactions(now):
+                    await self._run_job("transactions", run_transactions_sync)
+                if self._should_run_prices(now):
+                    await self._run_job("prices", run_prices_sync)
             except Exception:
                 logger.exception("Scheduler loop error")
             try:
@@ -79,6 +97,16 @@ class BackgroundSyncScheduler:
     def _should_run_portfolio(self, now: datetime) -> bool:
         return self._is_due(
             "portfolio", now, timedelta(minutes=self._settings.sync_portfolio_interval_minutes)
+        )
+
+    def _should_run_transactions(self, now: datetime) -> bool:
+        return self._is_due(
+            "transactions", now, timedelta(minutes=self._settings.sync_transactions_interval_minutes)
+        )
+
+    def _should_run_prices(self, now: datetime) -> bool:
+        return self._is_due(
+            "prices", now, timedelta(minutes=self._settings.sync_prices_interval_minutes)
         )
 
     def _is_due(self, name: str, now: datetime, interval: timedelta) -> bool:

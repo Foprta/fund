@@ -36,6 +36,30 @@ async def run_portfolio_sync(session: AsyncSession) -> dict[str, Any]:
     return await sync_coinstats_web(session)
 
 
+async def run_transactions_sync(session: AsyncSession) -> dict[str, Any]:
+    settings = get_settings()
+    if not _coinstats_web_configured(settings):
+        return {"skipped": True, "reason": "set COINSTATS_SHARE_TOKEN and COINSTATS_UUID in .env"}
+    from integrations.sync_transactions import sync_transactions
+    from fund_core.fund_value import recompute_fund_value_series
+
+    result = await sync_transactions(session)
+    result["recompute"] = await recompute_fund_value_series(session)
+    return result
+
+
+async def run_prices_sync(session: AsyncSession) -> dict[str, Any]:
+    settings = get_settings()
+    if not settings.coinstats_api_key:
+        return {"skipped": True, "reason": "set COINSTATS_API_KEY in .env"}
+    from integrations.sync_historical_prices import sync_historical_prices
+    from fund_core.fund_value import recompute_fund_value_series
+
+    result = await sync_historical_prices(session)
+    result["recompute"] = await recompute_fund_value_series(session)
+    return result
+
+
 async def run_rag_ingest(session: AsyncSession) -> dict[str, Any]:
     from fund_core.embeddings import embeddings_configured
 
@@ -51,6 +75,8 @@ async def run_all_syncs(session: AsyncSession) -> dict[str, Any]:
     for key, fn in (
         ("sheets", run_sheets_sync),
         ("portfolio", run_portfolio_sync),
+        ("transactions", run_transactions_sync),
+        ("prices", run_prices_sync),
         ("rag", run_rag_ingest),
     ):
         try:

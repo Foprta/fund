@@ -1,4 +1,3 @@
-import json
 from typing import Any
 
 from langchain_core.tools import BaseTool, tool
@@ -38,6 +37,65 @@ async def get_holdings(session: AsyncSession, limit: int = 15) -> dict[str, Any]
         "holdings": [
             {"symbol": r.symbol, "amount": r.amount, "value_usd": r.value_usd} for r in rows
         ],
+    }
+
+
+def _parse_date(s: str | None):
+    from datetime import date
+
+    if not s:
+        return None
+    try:
+        return date.fromisoformat(s.strip())
+    except ValueError:
+        return None
+
+
+def _downsample(series: list[dict], max_points: int) -> list[dict]:
+    """Keep at most max_points evenly spaced, always including the last point."""
+    n = len(series)
+    if n <= max_points:
+        return series
+    step = n / max_points
+    picked = [series[int(i * step)] for i in range(max_points)]
+    if picked[-1] is not series[-1]:
+        picked[-1] = series[-1]
+    return picked
+
+
+async def get_fund_value_history(
+    session: AsyncSession, start: str | None = None, end: str | None = None
+) -> dict[str, Any]:
+    series = await queries.fund_value_series(session, _parse_date(start), _parse_date(end))
+    if not series:
+        return {"error": "No fund value history yet."}
+    points = _downsample(series, 120)
+    return {
+        "from": series[0]["date"],
+        "to": series[-1]["date"],
+        "days": len(series),
+        "peak_usd": max(p["total_usd"] for p in series),
+        "latest_usd": series[-1]["total_usd"],
+        # date + total only, to keep the agent payload small; breakdown via the date tool.
+        "series": [{"date": p["date"], "total_usd": p["total_usd"]} for p in points],
+    }
+
+
+async def get_token_position_at_date(
+    session: AsyncSession, as_of: str, symbol: str | None = None
+) -> dict[str, Any]:
+    d = _parse_date(as_of)
+    if d is None:
+        return {"error": "as_of must be a date (YYYY-MM-DD)."}
+    positions = await queries.token_positions_at_date(session, d)
+    value = await queries.fund_value_at_date(session, d)
+    if symbol:
+        positions = [p for p in positions if p["symbol"].lower() == symbol.lower()]
+    return {
+        "as_of": as_of,
+        "fund_total_usd": value["total_usd"] if value else None,
+        "breakdown_usd": value["breakdown"] if value else None,
+        "positions": positions,
     }
 
 
@@ -89,7 +147,32 @@ def build_luna_tools(
             """Latest portfolio holdings from CoinStats sync: symbols, amounts, USD values."""
             return await get_holdings(session, limit=limit)
 
-        tools.extend([get_fund_summary_tool, get_holdings_tool])
+        @tool("get_fund_value_history")
+        async def get_fund_value_history_tool(
+            start: str | None = None, end: str | None = None
+        ) -> dict[str, Any]:
+            """Historical fund value in USD over time (daily series, peak, latest).
+            start/end optional ISO dates (YYYY-MM-DD). Use for 'how much was the
+            fund worth last year / at its peak / over time'."""
+            return await get_fund_value_history(session, start, end)
+
+        @tool("get_token_position_at_date")
+        async def get_token_position_at_date_tool(
+            as_of: str, symbol: str | None = None
+        ) -> dict[str, Any]:
+            """Token positions (quantities) and per-token USD breakdown on a past
+            date. as_of=YYYY-MM-DD; symbol optional to filter one coin. Use for
+            'how much YB did we hold in March / what was in the fund back then'."""
+            return await get_token_position_at_date(session, as_of, symbol)
+
+        tools.extend(
+            [
+                get_fund_summary_tool,
+                get_holdings_tool,
+                get_fund_value_history_tool,
+                get_token_position_at_date_tool,
+            ]
+        )
 
     if include_detail_lookup and _tools_local is not None:
         tools.extend(_tools_local.detail_tools(session))
