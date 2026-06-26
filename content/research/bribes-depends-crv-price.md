@@ -2,7 +2,7 @@
 title: "Цена CRV и объём bribes: эмпирическая проверка связи"
 summary: "Количественный анализ на 123 раундах Votium (2021–2026): связь цены CRV с объёмом bribes Curve/Convex. Эластичность по цене ~0.5 после контроля на TVL и тренд, структурный спад рынка bribes −25%/год. Не покрывает: прогноз цены CRV, veCRV-direct рынки вне Votium."
 topics: [CRV, Convex, bribes, Votium, vlCVX]
-version: 1
+version: 2
 ---
 
 # Цена токена CRV и объём bribes в экосистеме Curve/Convex: эмпирическая проверка связи
