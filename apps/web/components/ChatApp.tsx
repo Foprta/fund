@@ -2,7 +2,7 @@
 
 import { useChat } from "@ai-sdk/react";
 import type { UIMessage } from "ai";
-import { AlertCircle, MessageSquare, Menu, Plus, X } from "lucide-react";
+import { AlertCircle, MessageSquare, Menu, Plus, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Conversation,
@@ -205,7 +205,7 @@ function ChatSession({
         <div className="shrink-0 border-t bg-background py-3">
           <PromptInput onSubmit={handleSubmit}>
             <PromptInputTextarea
-              placeholder="Вопрос про фонд…"
+              placeholder="Спросите про DeFi…"
               className="min-h-[3.5rem] px-3 text-base"
             />
             <InputGroupAddon align="inline-end" className="self-end pb-2">
@@ -224,24 +224,26 @@ function DialogList({
   threads,
   activeId,
   onSelect,
+  onDelete,
   onNavigate,
 }: {
   threads: StoredThread[];
   activeId: string;
   onSelect: (id: string) => void;
+  onDelete: (id: string) => void;
   onNavigate?: () => void;
 }) {
   return (
     <ul className="flex-1 overflow-y-auto p-2">
       {threads.map((t) => (
-        <li key={t.id}>
+        <li key={t.id} className="group relative">
           <button
             type="button"
             onClick={() => {
               onSelect(t.id);
               onNavigate?.();
             }}
-            className={`w-full rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-accent ${
+            className={`w-full rounded-md py-2 pr-9 pl-2 text-left text-sm transition-colors hover:bg-accent ${
               t.id === activeId ? "bg-accent" : ""
             }`}
           >
@@ -249,6 +251,17 @@ function DialogList({
             {t.status === "streaming" && (
               <span className="text-muted-foreground text-xs">…</span>
             )}
+          </button>
+          <button
+            type="button"
+            aria-label="Удалить диалог"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(t.id);
+            }}
+            className="-translate-y-1/2 absolute top-1/2 right-1 rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            <Trash2 className="size-4" />
           </button>
         </li>
       ))}
@@ -334,6 +347,35 @@ export function ChatApp() {
     saveThreadStore({ ...store, activeId: id });
   };
 
+  const handleDeleteThread = (id: string) => {
+    const remaining = store.threads.filter((t) => t.id !== id);
+    // Deleting the last thread leaves a fresh empty one so the UI never breaks.
+    if (remaining.length === 0) {
+      const newId = crypto.randomUUID();
+      const next = {
+        activeId: newId,
+        threads: [
+          {
+            id: newId,
+            title: "Новый диалог",
+            updatedAt: Date.now(),
+            messages: [],
+            status: "idle" as const,
+          },
+        ],
+      };
+      setStore(next);
+      saveThreadStore(next);
+      setActiveId(newId);
+      return;
+    }
+    const nextActive = id === activeId ? remaining[0].id : activeId;
+    const next = { activeId: nextActive, threads: remaining };
+    setStore(next);
+    saveThreadStore(next);
+    setActiveId(nextActive);
+  };
+
   if (!mounted || !activeId) {
     return (
       <div className="flex h-[calc(100dvh-3.5rem)] items-center justify-center text-muted-foreground text-sm">
@@ -362,6 +404,7 @@ export function ChatApp() {
           threads={store.threads}
           activeId={conversationId}
           onSelect={handleSelectThread}
+          onDelete={handleDeleteThread}
         />
       </aside>
 
@@ -429,6 +472,7 @@ export function ChatApp() {
                 threads={store.threads}
                 activeId={conversationId}
                 onSelect={handleSelectThread}
+                onDelete={handleDeleteThread}
                 onNavigate={() => setDrawerOpen(false)}
               />
             </div>
