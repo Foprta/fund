@@ -53,7 +53,9 @@ class Settings(BaseSettings):
     sync_sheets_interval_minutes: int = 15
     sync_portfolio_interval_minutes: int = 30
     sync_transactions_interval_minutes: int = 60
-    sync_prices_interval_minutes: int = 1440
+    # Every 4h: keeps today's price fresh. Storage stays one row per day —
+    # upsert on (coin_id, price_date) overwrites the same day's price.
+    sync_prices_interval_minutes: int = 240
 
     # Historical fund-value series.
     fund_value_breakdown_top_n: int = 12
