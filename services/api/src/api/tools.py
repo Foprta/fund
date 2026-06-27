@@ -81,6 +81,11 @@ async def get_fund_value_history(
     }
 
 
+# Positions worth less than this on the date are dropped — dead/dust tokens
+# (e.g. a token that went to zero still has a token count but ~$0 value).
+_MIN_POSITION_USD = 500.0
+
+
 async def get_token_position_at_date(
     session: AsyncSession, as_of: str, symbol: str | None = None
 ) -> dict[str, Any]:
@@ -89,13 +94,27 @@ async def get_token_position_at_date(
         return {"error": "as_of must be a date (YYYY-MM-DD)."}
     positions = await queries.token_positions_at_date(session, d)
     value = await queries.fund_value_at_date(session, d)
+    breakdown = (value or {}).get("breakdown") or {}
     if symbol:
         positions = [p for p in positions if p["symbol"].lower() == symbol.lower()]
+
+    # Attach each position's USD value from the day's breakdown; drop anything
+    # below the threshold so zeroed/dust tokens don't show up.
+    enriched = []
+    for p in positions:
+        usd = breakdown.get(p["coin_id"])
+        if usd is None and symbol:
+            usd = 0.0  # explicit single-symbol lookup: report it even if dead
+        if usd is None or abs(usd) < _MIN_POSITION_USD:
+            if not symbol:
+                continue
+        enriched.append({**p, "value_usd": round(usd, 2) if usd is not None else None})
+    enriched.sort(key=lambda r: abs(r.get("value_usd") or 0), reverse=True)
+
     return {
         "as_of": as_of,
         "fund_total_usd": value["total_usd"] if value else None,
-        "breakdown_usd": value["breakdown"] if value else None,
-        "positions": positions,
+        "positions": enriched,
     }
 
 
