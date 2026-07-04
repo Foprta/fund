@@ -136,14 +136,6 @@ async def stream_chat(
 
     full = ""
     final_state: dict[str, Any] | None = None
-    # Preamble suppression (structural, language-independent): assistant text
-    # emitted BEFORE the first tool result is a thinking preamble ("Давай гляну.",
-    # "Let me check.", any language) — never stream it. This keys on POSITION (a
-    # ToolMessage boundary), not on a phrase list, so it works in every language.
-    # seen_tool flips True on the first ToolMessage; re-arms to False on each
-    # tool_calls chunk so inter-step narration in a multi-tool turn is dropped too.
-    # No trailer filtering — the editorial-tail style is accepted, not stripped.
-    seen_tool = False
 
     async for mode, payload in agent.astream(
         {"messages": messages},
@@ -156,16 +148,9 @@ async def stream_chat(
         if mode != "messages" or not isinstance(payload, tuple) or len(payload) != 2:
             continue
         msg, metadata = payload
-        # A tool result marks the boundary past the preamble. Detect it BEFORE
-        # the _is_agent_stream gate — the tools node is langgraph_node='tools',
-        # for which _is_agent_stream returns False.
-        if isinstance(msg, ToolMessage):
-            seen_tool = True
-            continue
         if not isinstance(msg, (AIMessage, AIMessageChunk)):
             continue
         if msg.tool_calls:
-            seen_tool = False  # re-arm: narration before the NEXT tool is preamble
             continue
         if not _is_agent_stream(metadata):
             continue
@@ -173,8 +158,6 @@ async def stream_chat(
         if not text:
             continue
         full += text
-        if not seen_tool:
-            continue  # pre-tool preamble — discarded by construction
         yield {"type": "token", "content": text}
 
     if final_state is None:
