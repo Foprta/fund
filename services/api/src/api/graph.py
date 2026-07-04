@@ -8,7 +8,6 @@ from api.access import AccessDecision, DENY_ALL
 from api.agent import agent_run_config, build_chat_agent
 from api.tools import _tool_result
 from fund_core.embeddings import embeddings_configured
-from fund_core.text_gate import split_hold_tail, strip_trailer
 from rag.catalog import format_research_catalog_block, list_active_research_catalog
 
 
@@ -137,18 +136,14 @@ async def stream_chat(
 
     full = ""
     final_state: dict[str, Any] | None = None
-    # Terseness gate (deterministic, prompt-independent):
-    #  * PREAMBLE: assistant text emitted BEFORE the first tool result is a
-    #    thinking preamble ("Давай гляну.") — never stream it. seen_tool flips
-    #    True on the first ToolMessage; re-arms to False on each tool_calls chunk
-    #    so inter-step narration in a multi-tool turn is dropped too.
-    #  * TRAILER: post-tool text flows through split_hold_tail, which always
-    #    holds back the last full sentence / ~220 chars, so a trailer clause can
-    #    never be shipped mid-stream; strip_trailer runs on the authoritative
-    #    final text before the held remainder is emitted.
+    # Preamble suppression (structural, language-independent): assistant text
+    # emitted BEFORE the first tool result is a thinking preamble ("Давай гляну.",
+    # "Let me check.", any language) — never stream it. This keys on POSITION (a
+    # ToolMessage boundary), not on a phrase list, so it works in every language.
+    # seen_tool flips True on the first ToolMessage; re-arms to False on each
+    # tool_calls chunk so inter-step narration in a multi-tool turn is dropped too.
+    # No trailer filtering — the editorial-tail style is accepted, not stripped.
     seen_tool = False
-    shipped = ""
-    tail = ""
 
     async for mode, payload in agent.astream(
         {"messages": messages},
@@ -180,11 +175,7 @@ async def stream_chat(
         full += text
         if not seen_tool:
             continue  # pre-tool preamble — discarded by construction
-        tail += text
-        head, tail = split_hold_tail(tail)
-        if head:
-            shipped += head
-            yield {"type": "token", "content": head}
+        yield {"type": "token", "content": text}
 
     if final_state is None:
         final_state = await agent.ainvoke({"messages": messages}, config=config)
@@ -192,19 +183,7 @@ async def stream_chat(
     state_messages = final_state.get("messages", [])
     tool_results = collect_tool_results(state_messages)
     final_ai = _final_ai_message(state_messages)
-    final_text = (_message_content(final_ai) if final_ai is not None else "") or full
-    cleaned = strip_trailer(final_text)
-    # Emit the not-yet-shipped, cleaned remainder as tokens (the client only ever
-    # sees tokens; the `done` frame carries no content to the browser). If the
-    # authoritative text isn't a suffix-superset of what streamed, prefer emitting
-    # nothing over duplicating already-shipped text.
-    if cleaned.startswith(shipped):
-        remainder = cleaned[len(shipped):]
-    elif not shipped:
-        remainder = cleaned
-    else:
-        remainder = ""
-    if remainder:
-        yield {"type": "token", "content": remainder}
+    if final_ai is not None:
+        full = _message_content(final_ai) or full
 
-    yield {"type": "done", "content": cleaned, "tool_results": tool_results}
+    yield {"type": "done", "content": full, "tool_results": tool_results}
