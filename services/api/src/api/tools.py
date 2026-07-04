@@ -184,12 +184,34 @@ def build_luna_tools(
             'how much YB did we hold in March / what was in the fund back then'."""
             return await get_token_position_at_date(session, as_of, symbol)
 
+        @tool("get_token_pnl")
+        async def get_token_pnl_tool(symbol: str) -> dict[str, Any]:
+            """Unrealized PnL for ONE token: how much was invested in it (sum of
+            buy costs minus sale proceeds) vs its current value, as USD and %.
+            Use for 'are we up or down on PENDLE / how much are we in the red on
+            YB / what's the PnL on <token>'. Returns invested_usd, current_usd,
+            pnl_usd, pnl_percent."""
+            result = await queries.token_pnl(session, symbol)
+            if result is None:
+                return {"error": f"no position or transactions for {symbol!r}"}
+            return result
+
+        @tool("get_fund_pnl")
+        async def get_fund_pnl_tool() -> dict[str, Any]:
+            """Per-token unrealized PnL across the WHOLE fund plus a fund total.
+            For each held/traded token: invested_usd vs current_usd, pnl_usd,
+            pnl_percent. Use for 'where are we up / down, which tokens are in the
+            red, overall PnL by position, how's the whole portfolio doing'."""
+            return await queries.fund_pnl(session)
+
         tools.extend(
             [
                 get_fund_summary_tool,
                 get_holdings_tool,
                 get_fund_value_history_tool,
                 get_token_position_at_date_tool,
+                get_token_pnl_tool,
+                get_fund_pnl_tool,
             ]
         )
 
