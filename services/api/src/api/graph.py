@@ -134,8 +134,20 @@ async def stream_chat(
     messages = _history_to_messages(history or [], message)
     config = agent_run_config(conversation_id=conversation_id)
 
-    full = ""
+    full = ""            # every streamed answer token (post-tool)
     final_state: dict[str, Any] | None = None
+    # Preamble suppression (structural, language-independent). A thinking preamble
+    # ("Давай гляну.", "Let me check.", any language) is text in a step that ends
+    # in a tool call. We can't know a step calls a tool until it does, so pre-tool
+    # text goes to `held` (NOT streamed yet); when the step turns out to call a
+    # tool, `held` is discarded as preamble; once a real tool result has come, all
+    # later answer text streams live. Keys on POSITION, not phrases — every
+    # language. GUARANTEE: if nothing streamed by the end (a plain no-tool answer,
+    # whose text sat in `held`), we emit the authoritative final text — the reply
+    # is never lost. No trailer filtering: the editorial-tail style is accepted.
+    held = ""
+    seen_tool = False
+    streamed_any = False
 
     async for mode, payload in agent.astream(
         {"messages": messages},
@@ -148,17 +160,28 @@ async def stream_chat(
         if mode != "messages" or not isinstance(payload, tuple) or len(payload) != 2:
             continue
         msg, metadata = payload
+        # Tool result → text before it was a preamble. Detect BEFORE _is_agent_stream
+        # (tools node is langgraph_node='tools' → _is_agent_stream returns False).
+        if isinstance(msg, ToolMessage):
+            seen_tool = True
+            held = ""
+            continue
         if not isinstance(msg, (AIMessage, AIMessageChunk)):
             continue
         if msg.tool_calls:
+            held = ""  # this step calls a tool → its narration was preamble
             continue
         if not _is_agent_stream(metadata):
             continue
         text = _message_content(msg)
         if not text:
             continue
-        full += text
-        yield {"type": "token", "content": text}
+        if seen_tool:
+            full += text
+            streamed_any = True
+            yield {"type": "token", "content": text}
+        else:
+            held += text  # not yet known to be preamble-or-answer
 
     if final_state is None:
         final_state = await agent.ainvoke({"messages": messages}, config=config)
@@ -166,7 +189,11 @@ async def stream_chat(
     state_messages = final_state.get("messages", [])
     tool_results = collect_tool_results(state_messages)
     final_ai = _final_ai_message(state_messages)
-    if final_ai is not None:
-        full = _message_content(final_ai) or full
+    final_text = (_message_content(final_ai) if final_ai is not None else "") or full or held
+    if not streamed_any and final_text:
+        # Nothing streamed — a plain no-tool answer (its text sat in `held`) or an
+        # answer that only materialized in state. Emit it so the reply is never lost.
+        yield {"type": "token", "content": final_text}
+    full = final_text
 
     yield {"type": "done", "content": full, "tool_results": tool_results}
