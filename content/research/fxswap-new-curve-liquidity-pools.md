@@ -12,6 +12,8 @@ FXSwap is a new volatile-pair pool design from @CurveFinance that automatically 
 
 This study compares end-of-block quotes for USDC->WBTC trades between (i) the Uniswap V3 WBTC/USDC 0.3% pool and (ii) an equivalent USDC->WBTC route via the @yieldbasis WBTC/crvUSD FXSwap pool, bridged through Curve’s crvUSD/USDC stableswap pool.
 
+(По самому Yield Basis — токеномика, кредитная линия crvUSD, параметры пулов и капы — см. yield-basis.md; здесь пул YB берётся как объект замера.)
+
 The FXSwap route delivered a better execution price for a $10m trade in approximately 80% of blocks sampled, despite similar pool TVL. We also analysed liquidity distribution to explain when and why performance diverges.
 
 Introduction

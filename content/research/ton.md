@@ -1,11 +1,11 @@
 ---
-title: "GRAM (бывший Toncoin / TON): обзор сети Telegram"
-summary: "Обзор GRAM — текущего тикера нативного токена сети TON (The Open Network), блокчейна, связанного с Telegram; GRAM — это переименованный Toncoin (возврат к оригинальному названию 2018 года). История: 'Gram' был задуман Telegram в 2018, собрал ~$1.7B на ICO, но SEC подала иск (окт 2019), и в июне 2020 Telegram вернул инвесторам >$1.2B + штраф $18.5M — проект свернули, а сеть продолжило open-source-сообщество как Toncoin (TON), позже переименованный обратно в Gram/GRAM. Тезис TON: блокчейн, интегрированный с Telegram (~900M пользователей), mini-apps, платежи. GRAM рассматривается как экспозиция на экосистему TON/Telegram. ВАЖНО: это TON, НЕ путать с unaffiliated токеном GRAMPUS (игровой EVM-токен). Конкретные детали недавнего ребренда (дата, голосование) не подтверждены и в документ не включены."
-topics: [GRAM, TON, Toncoin, Telegram, ecosystem]
-version: 2
+title: "TON / Toncoin / GRAM: обзор сети Telegram"
+summary: "GRAM — текущий тикер нативного токена сети TON (The Open Network), блокчейна, связанного с Telegram; GRAM = переименованный Toncoin, возврат к оригинальному имени 'Gram' из 2018 года. Покрывает SEC-сагу 2018-2020, тезис интеграции с Telegram и риски. Не путать с unaffiliated GRAMPUS."
+topics: [TON, Toncoin, GRAM, Telegram, ecosystem]
+version: 1
 ---
 
-# GRAM (бывший Toncoin / TON)
+# TON / Toncoin / GRAM
 
 ## Что это
 
