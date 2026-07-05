@@ -259,7 +259,7 @@ function DialogList({
               e.stopPropagation();
               onDelete(t.id);
             }}
-            className="-translate-y-1/2 absolute top-1/2 right-1 rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+            className="-translate-y-1/2 absolute top-1/2 right-1 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
           >
             <Trash2 className="size-4" />
           </button>
