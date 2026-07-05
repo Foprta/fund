@@ -81,6 +81,22 @@ async def get_fund_value_history(
     }
 
 
+async def get_fund_value_on_date(session: AsyncSession, as_of: str) -> dict[str, Any]:
+    """Exact fund value on ONE specific date, from the daily history in the DB.
+
+    This is the precise-single-day lookup: unlike get_fund_value_history (which
+    returns a downsampled series the model must pick a point out of), this returns
+    the one value for the requested date, so no interpolation/guessing is possible.
+    """
+    d = _parse_date(as_of)
+    if d is None:
+        return {"error": "as_of must be a date (YYYY-MM-DD)."}
+    value = await queries.fund_value_at_date(session, d)
+    if value is None:
+        return {"error": f"No fund value recorded on or before {as_of}."}
+    return {"date": value["date"], "total_usd": round(value["total_usd"], 2)}
+
+
 # Positions worth less than this on the date are dropped — dead/dust tokens
 # (e.g. a token that went to zero still has a token count but ~$0 value).
 _MIN_POSITION_USD = 500.0
@@ -170,10 +186,21 @@ def build_luna_tools(
         async def get_fund_value_history_tool(
             start: str | None = None, end: str | None = None
         ) -> dict[str, Any]:
-            """Historical fund value in USD over time (daily series, peak, latest).
-            start/end optional ISO dates (YYYY-MM-DD). Use for 'how much was the
-            fund worth last year / at its peak / over time'."""
+            """Fund value OVER A RANGE OF TIME: a downsampled daily series plus the
+            all-time peak and latest value. Use for 'over time / at its peak / the
+            curve / how it changed'. For the value on ONE specific date, use
+            get_fund_value_on_date instead — this series is downsampled and may not
+            contain that exact day."""
             return await get_fund_value_history(session, start, end)
+
+        @tool("get_fund_value_on_date")
+        async def get_fund_value_on_date_tool(as_of: str) -> dict[str, Any]:
+            """EXACT fund value in USD on ONE specific date. as_of=YYYY-MM-DD.
+            Use whenever the user asks what the fund was worth on a particular day
+            ('сколько стоил фонд 1 апреля 2025 / на 2025-04-01'). Returns the single
+            precise value — always use this for a specific date, never eyeball it
+            from the history series."""
+            return await get_fund_value_on_date(session, as_of)
 
         @tool("get_token_position_at_date")
         async def get_token_position_at_date_tool(
@@ -209,6 +236,7 @@ def build_luna_tools(
                 get_fund_summary_tool,
                 get_holdings_tool,
                 get_fund_value_history_tool,
+                get_fund_value_on_date_tool,
                 get_token_position_at_date_tool,
                 get_token_pnl_tool,
                 get_fund_pnl_tool,
