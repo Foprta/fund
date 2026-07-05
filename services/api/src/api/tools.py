@@ -14,29 +14,28 @@ except ImportError:
 
 
 async def get_fund_summary(session: AsyncSession) -> dict[str, Any]:
-    fund = await queries.latest_fund_snapshot(session)
+    """Current full fund value in USD. Spec: specs/fund_tools.md (I1, I4).
+
+    Returns the FULL portfolio value (PortfolioSnapshot.total_value) only — no
+    unit price / NAV (the credit line lowers unit price but not the fund's worth).
+    """
     portfolio = await queries.latest_portfolio_snapshot(session)
-    if fund is None and portfolio is None:
-        return {"error": "No fund data synced yet."}
+    if portfolio is None or portfolio.total_value is None:
+        return {"error": "No fund value synced yet."}
     return {
-        "unit_price_usd": fund.unit_price_usd if fund else None,
-        "unit_price_as_of": fund.as_of.isoformat() if fund else None,
-        "portfolio_total_value_usd": portfolio.total_value if portfolio else None,
-        "portfolio_as_of": portfolio.as_of.isoformat() if portfolio else None,
-        "unrealized_pnl": portfolio.unrealized_pnl if portfolio else None,
-        "all_time_pnl_percent": portfolio.all_time_pnl_percent if portfolio else None,
+        "total_usd": round(portfolio.total_value, 2),
+        "as_of": portfolio.as_of.isoformat(),
     }
 
 
 async def get_holdings(session: AsyncSession, limit: int = 15) -> dict[str, Any]:
+    """Current holdings. Spec: specs/fund_tools.md (I4) — {as_of, holdings:[{symbol,usd}]}."""
     rows = await queries.latest_holdings(session, limit=limit)
     if not rows:
         return {"error": "No holdings synced yet."}
     return {
         "as_of": rows[0].as_of.isoformat(),
-        "holdings": [
-            {"symbol": r.symbol, "amount": r.amount, "value_usd": r.value_usd} for r in rows
-        ],
+        "holdings": [{"symbol": r.symbol, "usd": round(r.value_usd, 2)} for r in rows],
     }
 
 
@@ -70,23 +69,22 @@ async def get_fund_value_history(
     if not series:
         return {"error": "No fund value history yet."}
     points = _downsample(series, 120)
+    peak = max(series, key=lambda p: p["total_usd"])
     return {
-        "from": series[0]["date"],
-        "to": series[-1]["date"],
-        "days": len(series),
-        "peak_usd": max(p["total_usd"] for p in series),
-        "latest_usd": series[-1]["total_usd"],
-        # date + total only, to keep the agent payload small; breakdown via the date tool.
-        "series": [{"date": p["date"], "total_usd": p["total_usd"]} for p in points],
+        "peak_usd": round(peak["total_usd"], 2),
+        "peak_date": peak["date"],
+        "latest_usd": round(series[-1]["total_usd"], 2),
+        "series": [{"date": p["date"], "total_usd": round(p["total_usd"], 2)} for p in points],
     }
 
 
 async def get_fund_value_on_date(session: AsyncSession, as_of: str) -> dict[str, Any]:
     """Exact fund value on ONE specific date, from the daily history in the DB.
 
-    This is the precise-single-day lookup: unlike get_fund_value_history (which
-    returns a downsampled series the model must pick a point out of), this returns
-    the one value for the requested date, so no interpolation/guessing is possible.
+    This is the precise-single-day lookup (tool: fund_value_on_date): unlike the
+    range tool (fund_value_range) which returns a downsampled series the model
+    must pick a point out of, this returns the one value for the requested date,
+    so no interpolation/guessing is possible.
     """
     d = _parse_date(as_of)
     if d is None:
@@ -124,13 +122,13 @@ async def get_token_position_at_date(
         if usd is None or abs(usd) < _MIN_POSITION_USD:
             if not symbol:
                 continue
-        enriched.append({**p, "value_usd": round(usd, 2) if usd is not None else None})
-    enriched.sort(key=lambda r: abs(r.get("value_usd") or 0), reverse=True)
+        enriched.append({"symbol": p["symbol"], "usd": round(usd, 2) if usd is not None else None})
+    enriched.sort(key=lambda r: abs(r.get("usd") or 0), reverse=True)
 
     return {
-        "as_of": as_of,
-        "fund_total_usd": value["total_usd"] if value else None,
-        "positions": enriched,
+        "date": as_of,
+        "total_usd": round(value["total_usd"], 2) if value else None,
+        "holdings": enriched,
     }
 
 
@@ -172,74 +170,69 @@ def build_luna_tools(
 
     if include_fund_data:
 
-        @tool("get_fund_summary")
-        async def get_fund_summary_tool() -> dict[str, Any]:
-            """Latest fund unit price (from Google Sheets) and CoinStats portfolio summary (NAV, PnL)."""
+        @tool("fund_now")
+        async def fund_now_tool() -> dict[str, Any]:
+            """Current total value of the fund in USD, right now.
+            Use for 'сколько фонд стоит сейчас / текущая стоимость фонда'."""
             return await get_fund_summary(session)
 
-        @tool("get_holdings")
-        async def get_holdings_tool(limit: int = 15) -> dict[str, Any]:
-            """Latest portfolio holdings from CoinStats sync: symbols, amounts, USD values."""
+        @tool("holdings_now")
+        async def holdings_now_tool(limit: int = 15) -> dict[str, Any]:
+            """Current holdings: each token and its USD value now.
+            Use for 'что сейчас в портфеле / текущий состав фонда'."""
             return await get_holdings(session, limit=limit)
 
-        @tool("get_fund_value_history")
-        async def get_fund_value_history_tool(
+        @tool("fund_value_on_date")
+        async def fund_value_on_date_tool(date: str) -> dict[str, Any]:
+            """Exact total fund value in USD on ONE specific day. date=YYYY-MM-DD.
+            Use for any 'сколько стоил фонд на <дату> / on <date>'. Returns the one
+            precise value for that day — use this for a specific date, always."""
+            return await get_fund_value_on_date(session, date)
+
+        @tool("fund_value_range")
+        async def fund_value_range_tool(
             start: str | None = None, end: str | None = None
         ) -> dict[str, Any]:
-            """Fund value OVER A RANGE OF TIME: a downsampled daily series plus the
-            all-time peak and latest value. Use for 'over time / at its peak / the
-            curve / how it changed'. For the value on ONE specific date, use
-            get_fund_value_on_date instead — this series is downsampled and may not
-            contain that exact day."""
+            """Fund value OVER A RANGE / the peak / the curve over time. Returns a
+            daily series plus the all-time peak and latest value. For ONE specific
+            day use fund_value_on_date instead (this series is thinned and may skip
+            the exact day)."""
             return await get_fund_value_history(session, start, end)
 
-        @tool("get_fund_value_on_date")
-        async def get_fund_value_on_date_tool(as_of: str) -> dict[str, Any]:
-            """EXACT fund value in USD on ONE specific date. as_of=YYYY-MM-DD.
-            Use whenever the user asks what the fund was worth on a particular day
-            ('сколько стоил фонд 1 апреля 2025 / на 2025-04-01'). Returns the single
-            precise value — always use this for a specific date, never eyeball it
-            from the history series."""
-            return await get_fund_value_on_date(session, as_of)
-
-        @tool("get_token_position_at_date")
-        async def get_token_position_at_date_tool(
-            as_of: str, symbol: str | None = None
+        @tool("holdings_on_date")
+        async def holdings_on_date_tool(
+            date: str, symbol: str | None = None
         ) -> dict[str, Any]:
-            """Token positions (quantities) and per-token USD breakdown on a past
-            date. as_of=YYYY-MM-DD; symbol optional to filter one coin. Use for
-            'how much YB did we hold in March / what was in the fund back then'."""
-            return await get_token_position_at_date(session, as_of, symbol)
+            """Holdings on ONE past day: each token and its USD value on that date.
+            date=YYYY-MM-DD; symbol optional to ask about one coin. Use for 'что
+            было в портфеле на <дату> / сколько YB держали в марте'."""
+            return await get_token_position_at_date(session, date, symbol)
 
-        @tool("get_token_pnl")
-        async def get_token_pnl_tool(symbol: str) -> dict[str, Any]:
-            """Unrealized PnL for ONE token: how much was invested in it (sum of
-            buy costs minus sale proceeds) vs its current value, as USD and %.
-            Use for 'are we up or down on PENDLE / how much are we in the red on
-            YB / what's the PnL on <token>'. Returns invested_usd, current_usd,
-            pnl_usd, pnl_percent."""
+        @tool("token_pnl")
+        async def token_pnl_tool(symbol: str) -> dict[str, Any]:
+            """Profit/loss on ONE token: how much was invested vs what it's worth
+            now, in USD and %. Use for 'насколько мы в плюсе/минусе по PENDLE / PnL
+            по <token>'."""
             result = await queries.token_pnl(session, symbol)
             if result is None:
                 return {"error": f"no position or transactions for {symbol!r}"}
             return result
 
-        @tool("get_fund_pnl")
-        async def get_fund_pnl_tool() -> dict[str, Any]:
-            """Per-token unrealized PnL across the WHOLE fund plus a fund total.
-            For each held/traded token: invested_usd vs current_usd, pnl_usd,
-            pnl_percent. Use for 'where are we up / down, which tokens are in the
-            red, overall PnL by position, how's the whole portfolio doing'."""
+        @tool("fund_pnl")
+        async def fund_pnl_tool() -> dict[str, Any]:
+            """Profit/loss across the WHOLE fund: per-token PnL plus a fund total.
+            Use for 'где мы в плюсе/минусе, PnL по всему фонду, как портфель в целом'."""
             return await queries.fund_pnl(session)
 
         tools.extend(
             [
-                get_fund_summary_tool,
-                get_holdings_tool,
-                get_fund_value_history_tool,
-                get_fund_value_on_date_tool,
-                get_token_position_at_date_tool,
-                get_token_pnl_tool,
-                get_fund_pnl_tool,
+                fund_now_tool,
+                holdings_now_tool,
+                fund_value_on_date_tool,
+                fund_value_range_tool,
+                holdings_on_date_tool,
+                token_pnl_tool,
+                fund_pnl_tool,
             ]
         )
 

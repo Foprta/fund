@@ -88,10 +88,10 @@ def _pnl_row(symbol: str, current: float, pct: float | None) -> dict:
         pnl_usd = current - invested
     return {
         "symbol": symbol,
-        "current_usd": round(current, 2),
+        "now_usd": round(current, 2),
         "invested_usd": round(invested, 2) if invested is not None else None,
         "pnl_usd": round(pnl_usd, 2) if pnl_usd is not None else None,
-        "pnl_percent": round(pct, 2) if pct is not None else None,
+        "pnl_pct": round(pct, 2) if pct is not None else None,
     }
 
 
@@ -110,22 +110,20 @@ async def fund_pnl(session: AsyncSession) -> dict:
     CoinStats' own per-holding P/L % from the latest DB snapshot (no live call)."""
     data = await _latest_holdings_pnl(session)
     rows = [_pnl_row(sym, d["current_usd"], d["pnl_percent"]) for sym, d in data.items()]
-    rows = [r for r in rows if abs(r["current_usd"]) > 1.0]
-    rows.sort(key=lambda r: r["current_usd"], reverse=True)
-    total_current = round(sum(r["current_usd"] for r in rows), 2)
+    rows = [r for r in rows if abs(r["now_usd"]) > 1.0]
+    rows.sort(key=lambda r: r["now_usd"], reverse=True)
+    total_now = round(sum(r["now_usd"] for r in rows), 2)
     total_invested = round(sum(r["invested_usd"] for r in rows if r["invested_usd"] is not None), 2)
-    total_pnl = round(total_current - total_invested, 2) if total_invested else None
+    total_pnl = round(total_now - total_invested, 2) if total_invested else None
     total_pct = (
         round(total_pnl / total_invested * 100.0, 2)
         if total_invested and total_invested > 1e-9
         else None
     )
     return {
-        "positions": rows,
-        "total_invested_usd": total_invested or None,
-        "total_current_usd": total_current,
         "total_pnl_usd": total_pnl,
-        "total_pnl_percent": total_pct,
+        "total_pnl_pct": total_pct,
+        "positions": rows,
     }
 
 
