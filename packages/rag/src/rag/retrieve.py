@@ -1,3 +1,9 @@
+"""Research retrieval — RAG semantic search over memos.
+
+Spec: specs/retrieve.md.
+Conformance tests: tests/test_retrieve.py.
+"""
+
 import logging
 from dataclasses import dataclass
 

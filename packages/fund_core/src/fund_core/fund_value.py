@@ -5,6 +5,9 @@ Value(day) = Σ position(coin, day) × price(coin, day), with prices forward-fil
 across gaps and treated as 0 before a coin's first known price (or if the coin
 has no price history at all). The result is upserted into fund_value_history,
 one row per day, with a per-token breakdown (top-N + 'other').
+
+Spec: specs/fund_value.md.
+Conformance tests: tests/test_fund_value.py.
 """
 
 import logging

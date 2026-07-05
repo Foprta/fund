@@ -10,6 +10,9 @@ trailer BEFORE it reaches the client.
 Single source of truth: the eval layer (tests_local) imports FORBIDDEN_TRAILERS
 and no_forbidden_trailer from here, and prod (api.graph) imports the stream
 helpers — so detector behavior is identical in the gate and in production.
+
+Spec: specs/text_gate.md (why + invariants).
+Conformance tests: tests/test_text_gate.py (detector mechanics).
 """
 
 from __future__ import annotations

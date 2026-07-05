@@ -32,4 +32,5 @@ pythonpath = [".", "packages/fund_core/src", "packages/rag/src", "services/api/s
 testpaths = ["tests"]
 markers = [
     "integration: real LLM + Postgres (local only; pytest -m integration)",
+    "prod_eval: end-to-end eval against live prod (local only; RUN_PROD_EVAL=1 pytest -m prod_eval)",
 ]

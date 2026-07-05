@@ -8,6 +8,10 @@ fail-closed default grants research-only access and no fund tools.
 Scope (what counts as on-topic) is left to the model: the system prompt carries
 the research catalog and the refusal rule. A pre-model keyword gate used to live
 here but over-refused legitimate research topics, so it was removed.
+
+Spec: specs/access_policy.md.
+Conformance tests: tests_local/test_policy.py,
+tests_local/test_conversation_latch.py, tests_local/eval/golden_questions.yaml.
 """
 
 from __future__ import annotations
