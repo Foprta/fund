@@ -25,16 +25,17 @@ value.
   `SheetsPublicClient` with an empty `google_sheets_spreadsheet_id` raises
   `ValueError`. No network call happens in `__init__`.
 
-- **I2 — single-cell ranges are expanded before fetch.** When
-  `sheets_fund_price_range` is a single cell `<Col><Row>` (optionally
-  sheet-qualified), the range sent to the fetch layer is widened to
-  `<Col>1:<Col><Row+1>` and the sheet name (if any) is passed through. A range
-  that is already `A:B` style (a span) is fetched as-is.
+- **I2 — the configured cell is read EXACTLY.** When `sheets_fund_price_range`
+  is a single cell `<Col><Row>` (optionally sheet-qualified), that exact cell is
+  fetched — no window widening. The fund price lives in one specific labelled row
+  (e.g. "Баланс" — the FULL fund value, before any credit deduction), and a
+  neighbouring row ("Кредит", "Итого") must never be picked up. A range already
+  in `A:B` span form is fetched as-is; from a span the first populated cell is used.
 
-- **I3 — last populated cell wins.** From the fetched rows, the value returned
-  is parsed from the **last** row whose first column is non-empty (after
-  stripping whitespace). Earlier rows — including a populated target cell that
-  is followed by another populated row — do not shadow a later populated one.
+- **I3 — the fund value is the FULL balance, not a credit-adjusted total.** The
+  configured cell points at the full-balance figure. The credit line lowers a
+  separate "Итого" row, but that never reduces what the fund is worth (see
+  specs/fund_tools.md I1). Reading the wrong (lower) row is a bug.
 
 - **I4 — empty block is an error, not a sentinel.** If every fetched row has an
   empty/whitespace first column (or there are no rows), `read_fund_unit_price()`
@@ -45,11 +46,10 @@ value.
   `"1,234.56"`, `"0,47%"`) are accepted end-to-end. The exact parsing rules are
   the contract of `sheet_parse`, not of this module.
 
-## Notes for humans (not pinned as intended behavior)
+## History
 
-The single-cell expansion in I2 widens the window by exactly **one** row
-(`Row+1`) and then takes the *last* populated cell (I3). For the default
-`Fund!B2` this fetches `B1:B3`. If `B3` happens to hold an unrelated populated
-value, that value — not `B2` — is returned. The tests pin this **actual**
-behavior; whether the `Row+1`-only window is intended is flagged in the review
-as a suspected bug, not resolved here.
+An earlier version widened a single-cell range to `<Col>1:<Col><Row+1>` and took
+the LAST populated cell, which on the live sheet (labels "Баланс"/"Кредит"/"Итого"
+in column B, values in D) returned the credit-reduced "Итого" instead of the full
+"Баланс". Fixed to read the configured cell exactly (I2), and the deployed
+`SHEETS_FUND_PRICE_RANGE` points at the full-balance row.

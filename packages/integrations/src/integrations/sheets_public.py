@@ -24,13 +24,17 @@ class SheetsPublicClient:
         return fetch_gviz_csv(self._spreadsheet_id, range_a1, sheet=sheet)
 
     def read_fund_unit_price(self) -> float:
+        """Read the FULL fund value from the exact configured cell.
+
+        Spec: specs/sheets_public.md (I2, I3). The configured cell points at the
+        full-balance row ("Баланс"), never the credit-reduced "Итого" — so we read
+        that one cell exactly and do NOT widen the window or scan neighbours.
+        """
         sheet, range_a1 = split_sheet_range(self._fund_price_range)
-        m = _SINGLE_CELL.match(range_a1)
-        if m:
-            col, row = m.group(1).upper(), int(m.group(2))
-            range_a1 = f"{col}1:{col}{row + 1}"
         rows = fetch_gviz_csv(self._spreadsheet_id, range_a1, sheet=sheet)
-        for row in reversed(rows):
+        # First populated cell of the fetched result (an exact single cell yields
+        # one row; a span yields the first non-empty).
+        for row in rows:
             if row and str(row[0]).strip():
                 return parse_sheet_number(row[0])
         raise ValueError(f"Empty fund price cell: {self._fund_price_range}")

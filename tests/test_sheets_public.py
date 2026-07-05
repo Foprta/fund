@@ -57,20 +57,21 @@ def test_init_does_not_fetch():
 
 
 # --------------------------------------------------------------------------- #
-# I2: single-cell range is widened to <Col>1:<Col><Row+1>, sheet passed on.   #
+# I2: the configured single cell is fetched EXACTLY (no window widening), so a  #
+# neighbouring row (Кредит / Итого) can never be picked up.                     #
 # --------------------------------------------------------------------------- #
-def test_single_cell_range_is_expanded():
-    client = _client(price_range="Fund!B2")
+def test_single_cell_range_read_exactly():
+    client = _client(price_range="Fund!D1")
     with patch(
         "integrations.sheets_public.fetch_gviz_csv",
-        return_value=[["1"]],
+        return_value=[["45161.18"]],
     ) as fetch:
         client.read_fund_unit_price()
     fetch.assert_called_once()
     args, kwargs = fetch.call_args
     # positional: (spreadsheet_id, range_a1); sheet is keyword-only.
     assert args[0] == "sheet-123"
-    assert args[1] == "B1:B3"
+    assert args[1] == "D1"  # exact cell, NOT widened to D1:D2
     assert kwargs["sheet"] == "Fund"
 
 
@@ -87,20 +88,27 @@ def test_span_range_is_fetched_as_is():
 
 
 # --------------------------------------------------------------------------- #
-# I3: the LAST populated first-column cell wins (mutation guard).             #
-# The two values differ, so a reversed->forward flip returns a different      #
-# number and turns this test red.                                             #
+# I3: the FIRST populated cell of the fetched result is used. For an exact      #
+# single cell that is the cell itself; for a span it's the first non-empty row. #
 # --------------------------------------------------------------------------- #
-def test_last_populated_cell_wins():
+def test_first_populated_cell_wins():
     client = _client()
-    rows = [["10.0"], ["20.0"], ["30.0"]]
+    # An exact-cell fetch returns one row — its value is used as-is.
+    with patch("integrations.sheets_public.fetch_gviz_csv", return_value=[["45161.18"]]):
+        assert client.read_fund_unit_price() == pytest.approx(45161.18)
+
+
+def test_span_uses_first_populated_row():
+    client = _client(price_range="Fund!D1:D3")
+    rows = [["45161.18"], ["6550.90"], ["38610.28"]]
     with patch("integrations.sheets_public.fetch_gviz_csv", return_value=rows):
-        assert client.read_fund_unit_price() == pytest.approx(30.0)
+        # First populated (Баланс), never the later Итого — mutation guard.
+        assert client.read_fund_unit_price() == pytest.approx(45161.18)
 
 
-def test_trailing_empty_cells_are_skipped():
+def test_leading_empty_cells_are_skipped():
     client = _client()
-    rows = [["10.0"], ["42.5"], [""], ["   "], []]
+    rows = [[""], ["   "], ["42.5"], ["99.0"]]
     with patch("integrations.sheets_public.fetch_gviz_csv", return_value=rows):
         assert client.read_fund_unit_price() == pytest.approx(42.5)
 
