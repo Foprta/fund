@@ -60,19 +60,27 @@ def test_init_does_not_fetch():
 # I2: the configured single cell is fetched EXACTLY (no window widening), so a  #
 # neighbouring row (Кредит / Итого) can never be picked up.                     #
 # --------------------------------------------------------------------------- #
-def test_single_cell_range_read_exactly():
-    client = _client(price_range="Fund!D1")
-    with patch(
-        "integrations.sheets_public.fetch_gviz_csv",
-        return_value=[["45161.18"]],
-    ) as fetch:
-        client.read_fund_unit_price()
-    fetch.assert_called_once()
+def test_single_cell_fetched_as_span_returns_target_row():
+    # gviz rejects a lone cell, so D2 is fetched as the span D1:D2 and the value
+    # at the TARGET row (index 1 = D2) is returned — never a neighbour.
+    client = _client(price_range="Fund!D2")
+    rows = [["45161.18"], ["6550.90"]]  # D1 Баланс, D2 Кредит
+    with patch("integrations.sheets_public.fetch_gviz_csv", return_value=rows) as fetch:
+        val = client.read_fund_unit_price()
     args, kwargs = fetch.call_args
-    # positional: (spreadsheet_id, range_a1); sheet is keyword-only.
     assert args[0] == "sheet-123"
-    assert args[1] == "D1"  # exact cell, NOT widened to D1:D2
+    assert args[1] == "D1:D2"          # span, not a lone cell
     assert kwargs["sheet"] == "Fund"
+    assert val == pytest.approx(6550.90)  # target row D2, not last/first
+
+
+def test_single_cell_d1_returns_first_row():
+    client = _client(price_range="Fund!D1")
+    rows = [["45161.18"], ["6550.90"]]  # span D1:D2
+    with patch("integrations.sheets_public.fetch_gviz_csv", return_value=rows) as fetch:
+        val = client.read_fund_unit_price()
+    assert fetch.call_args[0][1] == "D1:D2"
+    assert val == pytest.approx(45161.18)  # D1 Баланс, not D2
 
 
 def test_span_range_is_fetched_as_is():
@@ -88,29 +96,24 @@ def test_span_range_is_fetched_as_is():
 
 
 # --------------------------------------------------------------------------- #
-# I3: the FIRST populated cell of the fetched result is used. For an exact      #
-# single cell that is the cell itself; for a span it's the first non-empty row. #
+# I3: the value at the TARGET row (row-1) of the fetched span is returned —     #
+# never a neighbour. Default range D3 → span D1:D3 → index 2.                   #
 # --------------------------------------------------------------------------- #
-def test_first_populated_cell_wins():
-    client = _client()
-    # An exact-cell fetch returns one row — its value is used as-is.
-    with patch("integrations.sheets_public.fetch_gviz_csv", return_value=[["45161.18"]]):
-        assert client.read_fund_unit_price() == pytest.approx(45161.18)
+def test_target_row_wins_not_neighbour():
+    client = _client(price_range="Fund!D3")  # target row 3
+    rows = [["45161.18"], ["6550.90"], ["38610.28"]]  # D1 Баланс, D2 Кредит, D3 Итого
+    with patch("integrations.sheets_public.fetch_gviz_csv", return_value=rows) as fetch:
+        val = client.read_fund_unit_price()
+    assert fetch.call_args[0][1] == "D1:D3"
+    assert val == pytest.approx(38610.28)  # D3, the configured target row
 
 
-def test_span_uses_first_populated_row():
+def test_span_range_uses_first_populated_row():
+    # An explicit span (not a single cell) uses the first populated row.
     client = _client(price_range="Fund!D1:D3")
     rows = [["45161.18"], ["6550.90"], ["38610.28"]]
     with patch("integrations.sheets_public.fetch_gviz_csv", return_value=rows):
-        # First populated (Баланс), never the later Итого — mutation guard.
         assert client.read_fund_unit_price() == pytest.approx(45161.18)
-
-
-def test_leading_empty_cells_are_skipped():
-    client = _client()
-    rows = [[""], ["   "], ["42.5"], ["99.0"]]
-    with patch("integrations.sheets_public.fetch_gviz_csv", return_value=rows):
-        assert client.read_fund_unit_price() == pytest.approx(42.5)
 
 
 # --------------------------------------------------------------------------- #
@@ -144,7 +147,7 @@ def test_no_rows_raises():
     ],
 )
 def test_locale_number_parsed_end_to_end(cell, expected):
-    client = _client()
+    client = _client(price_range="Fund!D1")  # target row 0, one-row span suffices
     with patch(
         "integrations.sheets_public.fetch_gviz_csv",
         return_value=[[cell]],
