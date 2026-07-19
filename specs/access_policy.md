@@ -25,6 +25,13 @@ Conformance tests: `tests_local/test_policy.py`,
 
 ## Invariants
 
+### A0. Piggy bank is a separate secret phrase
+A second phrase (`PIGGY_AUTH_PHRASE`) independently unlocks `allow_piggy_bank`
+(BTC house-savings tools). It does **not** unlock fund tools or detail lookup.
+Fund insider (`INSIDER_AUTH_PHRASE` / `#N`) does **not** unlock piggy. Empty
+piggy phrase fails closed. Piggy latches across user turns like fund insider.
+Spec detail: `specs/piggy_bank.md`.
+
 ### A1. Authorization is a #N slot reference OR the secret phrase
 Insider fund data unlocks on EITHER a `#N` slot reference in the message OR the
 configured `INSIDER_AUTH_PHRASE`. This is the owner's chosen model: `#N` is a

@@ -157,13 +157,14 @@ def build_luna_tools(
     *,
     include_fund_data: bool = False,
     include_detail_lookup: bool = False,
+    include_piggy_bank: bool = False,
 ) -> list[BaseTool]:
     """LangChain tools bound to the request DB session.
 
     Fund figures and any per-slot lookups are gated by the access decision: a
     default request gets research-only tools, so the model has no way to read
     fund numbers. Per-slot lookup tools, when allowed, come from the optional
-    local module.
+    local module. Piggy-bank tools are a separate local gate.
     """
 
     tools: list[BaseTool] = []
@@ -238,6 +239,9 @@ def build_luna_tools(
 
     if include_detail_lookup and _tools_local is not None:
         tools.extend(_tools_local.detail_tools(session))
+
+    if include_piggy_bank and _tools_local is not None and hasattr(_tools_local, "piggy_tools"):
+        tools.extend(_tools_local.piggy_tools())
 
     if embeddings_configured():
 

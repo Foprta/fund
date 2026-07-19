@@ -20,6 +20,8 @@ class AccessDecision:
     allow_fund_tools: bool = False
     # Whether the optional local detail-lookup tools may be exposed.
     allow_detail_lookup: bool = False
+    # Whether the optional local piggy-bank (BTC house-savings) tools may be exposed.
+    allow_piggy_bank: bool = False
     # Extra system-prompt fragment (empty in the fail-closed build).
     prompt_addendum: str = ""
 

@@ -1,1 +1,1 @@
-"""External integrations: CoinStats, Google Sheets."""
+"""External integrations: CoinStats, Google Sheets, Ethereum RPC, Goldsky."""

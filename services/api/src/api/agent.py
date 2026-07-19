@@ -95,6 +95,7 @@ def build_chat_agent(
         session,
         include_fund_data=decision.allow_fund_tools,
         include_detail_lookup=decision.allow_detail_lookup,
+        include_piggy_bank=decision.allow_piggy_bank,
     )
     llm = get_chat_llm(streaming=True)
     return create_react_agent(
