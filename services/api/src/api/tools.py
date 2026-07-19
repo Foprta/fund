@@ -18,6 +18,11 @@ except ImportError:
     _tools_local = None
 
 
+def _tool_result(name: str, result: Any) -> dict[str, Any]:
+    """Shape a tool call for chat persistence (used by graph.collect_tool_results)."""
+    return {"tool": name, "result": result}
+
+
 async def search_research_tool(
     session: AsyncSession, query: str, limit: int = 5
 ) -> list[dict[str, Any]]:
