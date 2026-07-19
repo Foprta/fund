@@ -4,8 +4,6 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "certifi>=2024.0",
-    "eth-abi>=5.0",
-    "eth-hash[pycryptodome]>=0.7",
     "fund-core",
     "httpx>=0.28",
 ]

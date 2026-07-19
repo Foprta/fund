@@ -16,11 +16,9 @@ from dataclasses import dataclass
 class AccessDecision:
     # If set, the pipeline emits this text verbatim and binds no tools.
     canned_reply: str | None = None
-    # Whether fund summary / holdings tools may be exposed to the model.
+    # Optional local capability flags (no-op in the public fail-closed build).
     allow_fund_tools: bool = False
-    # Whether the optional local detail-lookup tools may be exposed.
     allow_detail_lookup: bool = False
-    # Whether the optional local piggy-bank (BTC house-savings) tools may be exposed.
     allow_piggy_bank: bool = False
     # Extra system-prompt fragment (empty in the fail-closed build).
     prompt_addendum: str = ""

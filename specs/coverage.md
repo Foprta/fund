@@ -6,14 +6,15 @@ why. Per the CDD contract: under-coverage is stated explicitly, never implied.
 ## Covered by conformance tests (spec ↔ tests ↔ impl)
 | Module | Spec | Tests |
 |---|---|---|
-| fund tools (tools.py) | specs/fund_tools.md | tests/test_fund_tools.py |
-| slot share (tools_local.py) | specs/fund_tools.md (I2) | tests_local/test_slot_share.py |
-| access policy (policy.py, policy_local.py) | specs/access_policy.md | tests_local/test_policy.py, test_conversation_latch.py |
+| access fail-closed (policy.py) | specs/access_policy.md | tests/test_access_failclosed.py |
 | terseness gate (text_gate.py) | specs/text_gate.md | tests/test_text_gate.py |
 | fund value recompute (fund_value.py) | specs/fund_value.md | tests/test_fund_value.py |
 | RAG retrieve contract (retrieve.py) | specs/retrieve.md | tests/test_retrieve.py |
 | scheduler intervals (scheduler.py) | specs/scheduler.md | tests/test_scheduler.py |
 | public-sheet parse (sheets_public.py) | specs/sheets_public.md | tests/test_sheets_public.py |
+
+Optional local overlay (not in public tree): chat tools + access mechanism —
+see private repo `specs/` + `tests_local/`.
 
 All mutation-verified: breaking the logic turns the relevant tests red, so green
 is not vacuous. Full non-integration corpus: `pytest tests/ tests_local/

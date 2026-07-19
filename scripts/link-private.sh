@@ -1,19 +1,30 @@
 #!/usr/bin/env bash
 # Symlink private overlay files into this public monorepo checkout.
-# Usage: ./scripts/link-private.sh [path-to-luna-fund-private]
+# Usage: ./scripts/link-private.sh [path-to-fund-private]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PRIV="${1:-$ROOT/../luna-fund-private}"
+if [[ $# -ge 1 ]]; then
+  PRIV="$1"
+else
+  for cand in "$ROOT/../fund-private" "$ROOT/../luna-fund-private"; do
+    if [[ -d "$cand/src/api" ]]; then
+      PRIV="$cand"
+      break
+    fi
+  done
+  PRIV="${PRIV:-$ROOT/../fund-private}"
+fi
 
 if [[ ! -d "$PRIV/src/api" ]]; then
   echo "Private overlay not found at: $PRIV" >&2
-  echo "Clone https://github.com/Foprta/luna-fund-private next to this repo, or pass its path." >&2
+  echo "Clone https://github.com/Foprta/fund-private next to this repo, or pass its path." >&2
   exit 1
 fi
 
 link_one() {
   local src="$1" dest="$2"
+  src="$(cd "$(dirname "$src")" && pwd)/$(basename "$src")"
   mkdir -p "$(dirname "$dest")"
   if [[ -e "$dest" || -L "$dest" ]]; then
     rm -rf "$dest"

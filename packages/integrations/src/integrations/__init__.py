@@ -1,4 +1,4 @@
-"""External integrations: CoinStats, Google Sheets, Ethereum RPC, Goldsky."""
+"""External integrations: CoinStats, Google Sheets, sync jobs."""
 
 from pkgutil import extend_path
 

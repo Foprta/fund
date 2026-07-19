@@ -164,7 +164,7 @@ function ChatSession({
             {messages.length === 0 ? (
               <ConversationEmptyState
                 title="Начните диалог"
-                description="Спросите про портфель, NAV/PnL или research-мемо."
+                description="Спросите про Curve, Pendle, Yield Basis и другие DeFi-темы."
                 icon={<MessageSquare className="size-8" />}
               />
             ) : (
