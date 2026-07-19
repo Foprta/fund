@@ -82,6 +82,9 @@ content/research/     — RAG markdown sources
 ## Privacy model
 
 - Keep PII out of `content/research/` and off synced sheet columns.
+- Fund digits / piggy bank live in a **private overlay** repo — see
+  [docs/private-overlay.md](docs/private-overlay.md). Public clone without the
+  overlay is research-only (`DENY_ALL`).
 
 ## LangSmith (optional)
 

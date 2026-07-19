@@ -45,8 +45,11 @@ node_modules/
 apps/portal/dist/
 
 # Local deployment-only modules, data and tests — never committed
+# (dirs or symlinks from scripts/link-private.sh)
+/local
 /local/
 *_local.py
 api/policy_local.py
 migrations/versions/*_local.py
+/tests_local
 /tests_local/

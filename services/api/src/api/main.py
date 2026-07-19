@@ -26,6 +26,26 @@ from fund_core.models import Conversation, Message
 from fund_core.scheduler import BackgroundSyncScheduler
 from fund_core.sync_runner import run_all_syncs
 
+
+def _overlay_status() -> dict[str, bool]:
+    """Whether private overlay modules imported (no secrets logged)."""
+    try:
+        import api.policy_local  # noqa: F401
+
+        policy = True
+    except ImportError:
+        policy = False
+    try:
+        import api.tools_local as tl
+
+        piggy = hasattr(tl, "piggy_tools")
+        detail = hasattr(tl, "detail_tools")
+    except ImportError:
+        piggy = False
+        detail = False
+    return {"policy_local": policy, "detail_tools": detail, "piggy_tools": piggy}
+
+
 def _configure_logging() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -38,6 +58,14 @@ async def lifespan(app: FastAPI):
     _configure_logging()
     settings = get_settings()
     logger = logging.getLogger("luna.api")
+
+    overlay = _overlay_status()
+    logger.info(
+        "Private overlay: policy_local=%s detail_tools=%s piggy_tools=%s",
+        overlay["policy_local"],
+        overlay["detail_tools"],
+        overlay["piggy_tools"],
+    )
 
     scheduler: BackgroundSyncScheduler | None = None
     if settings.sync_enabled:
@@ -77,7 +105,11 @@ class ChatResponse(BaseModel):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "langsmith": langsmith_enabled()}
+    return {
+        "status": "ok",
+        "langsmith": langsmith_enabled(),
+        "overlay": _overlay_status(),
+    }
 
 
 @app.post("/v1/chat")
